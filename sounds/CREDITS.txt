@@ -1,0 +1,12 @@
+Attention sounds
+================
+
+wait-wood-01..10.wav, wait-hollow-01..10.wav
+  Author:  Paul Preibisch
+  Source:  Rakazo mobile app, apps/mobile/assets/sounds/ (the waiting sound
+           played while a bot is thinking in conversation mode)
+  License: Apache License 2.0
+  Changes: converted from AAC (.m4a) to 16-bit 22.05 kHz mono WAV.
+
+One is picked at random and played just before a spoken prompt.
+Put your own .wav files in ~/.claude-attention/sounds/ to use them instead.

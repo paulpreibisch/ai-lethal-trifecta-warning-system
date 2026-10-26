@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude · Attention</title>
+<style>
+  :root{
+    --bg:#070912; --panel:#0d1120; --panel2:#111629; --line:#1e2540; --line2:#2a3358;
+    --ink:#e6ebff; --dim:#939dc4; --faint:#6f7aa6; --hue:#7c9cff; --hue2:#a78bfa;
+    --active:#5eead4; --pin:#fbbf24; --radius:16px;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    background:
+      radial-gradient(700px 420px at 85% -10%, #1b2550 0%, transparent 60%),
+      radial-gradient(600px 380px at -10% 110%, #1d1638 0%, transparent 55%),
+      var(--bg);
+    color:var(--ink); font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased; display:flex; flex-direction:column;
+  }
+  ::-webkit-scrollbar{width:10px}
+  ::-webkit-scrollbar-thumb{background:var(--line2);border-radius:6px;border:2px solid transparent;background-clip:content-box}
+
+  header{display:flex;align-items:center;gap:10px;padding:16px 18px 6px}
+  .logo{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;font-size:15px;
+    background:linear-gradient(135deg,var(--hue),var(--hue2));box-shadow:0 0 18px rgba(124,156,255,.35)}
+  header b{font-size:14px;letter-spacing:.02em}
+  .conn{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--faint);font-size:11.5px}
+  .conn i{width:8px;height:8px;border-radius:50%;background:#64748b}
+  .conn.live i{background:var(--active);box-shadow:0 0 8px var(--active)}
+
+  /* Counts for today and this week: outside the scrolling list, so always in view. */
+  .stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:6px 16px 4px}
+  .period{background:rgba(13,17,32,.85);border:1px solid var(--line);border-radius:12px;padding:10px 12px;min-width:0}
+  .period h3{margin:0 0 6px;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);font-weight:700}
+  .nums{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline}
+  .num{display:flex;align-items:baseline;gap:5px;font-size:11.5px;color:var(--dim)}
+  .num b{font-size:20px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums}
+  .num.allowed b{color:#4ade80}
+  .num.denied b{color:#f87171}
+  .num.waiting b{color:var(--pin)}
+  .riskbar{display:flex;height:5px;border-radius:3px;overflow:hidden;margin-top:8px;background:var(--line)}
+  .riskbar i{display:block;height:100%}
+  @media (max-width:520px){.stats{grid-template-columns:1fr}}
+
+  /* Risk: one colour per level, on the badge and the card's left edge. */
+  .risk-low{--risk:#4ade80}
+  .risk-medium{--risk:#facc15}
+  .risk-high{--risk:#fb923c}
+  .risk-critical{--risk:#f43f5e}
+  .hero[class*="risk-"],.item[class*="risk-"]{border-left:4px solid var(--risk)}
+  .riskbadge{display:inline-flex;align-items:center;gap:6px;justify-content:flex-end;margin-bottom:6px;padding:3px 10px;border-radius:999px;
+    font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#0b0f1e;background:var(--risk)}
+  .riskbadge .why{font-weight:600;letter-spacing:0;text-transform:none;opacity:.8}
+  .risk-critical .riskbadge{animation:alarm 1.2s ease-in-out infinite}
+  @keyframes alarm{50%{box-shadow:0 0 0 4px rgba(244,63,94,.35)}}
+  .itemhead .riskbadge{font-size:10.5px;padding:2px 8px}
+
+  main{flex:1;overflow:auto;padding:10px 16px 20px;display:flex;flex-direction:column;gap:12px}
+
+  .hero{position:relative;border-radius:var(--radius);padding:20px 20px 18px;
+    background:linear-gradient(160deg,rgba(124,156,255,.14),rgba(167,139,250,.08) 60%,rgba(13,17,32,.9));
+    border:1px solid rgba(124,156,255,.35);box-shadow:0 10px 40px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.06)}
+  .hero.fresh{animation:arrive .5s cubic-bezier(.2,.9,.3,1.2)}
+  @keyframes arrive{from{transform:translateY(-8px) scale(.98);opacity:0}to{transform:none;opacity:1}}
+  .eyebrow{display:flex;align-items:center;gap:8px;color:var(--pin);font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}
+  .eyebrow .pulse{width:7px;height:7px;border-radius:50%;background:var(--pin);box-shadow:0 0 0 0 rgba(251,191,36,.6);animation:pulse 1.6s infinite}
+  @keyframes pulse{70%{box-shadow:0 0 0 9px rgba(251,191,36,0)}100%{box-shadow:0 0 0 0 rgba(251,191,36,0)}}
+  .hero .row{display:flex;gap:16px;align-items:flex-start;margin-top:12px}
+  .hero .line{font-size:19px;line-height:1.45;font-weight:600;letter-spacing:-.005em;margin:0}
+  .note{margin-top:12px;color:var(--dim);font-size:12.5px;border-left:2px solid var(--line2);padding-left:10px}
+  .note span{color:var(--faint)}
+  .meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
+  .chip{font-size:11px;color:var(--dim);background:rgba(17,22,41,.85);border:1px solid var(--line);border-radius:999px;padding:3px 9px}
+
+  .play{flex:0 0 auto;width:56px;height:56px;border-radius:50%;border:none;cursor:pointer;display:grid;place-items:center;
+    background:linear-gradient(135deg,var(--hue),var(--hue2));color:#0b0f1e;
+    box-shadow:0 6px 22px rgba(124,156,255,.45);transition:transform .12s ease, box-shadow .12s ease}
+  .play:hover{transform:scale(1.06);box-shadow:0 8px 28px rgba(124,156,255,.6)}
+  .play:active{transform:scale(.97)}
+  .play:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+  .play svg{width:22px;height:22px}
+  .play .bars{display:none;gap:3px;align-items:flex-end;height:20px}
+  .play .bars i{width:3px;background:#0b0f1e;border-radius:2px;animation:bar .9s ease-in-out infinite}
+  .play .bars i:nth-child(2){animation-delay:.15s}.play .bars i:nth-child(3){animation-delay:.3s}.play .bars i:nth-child(4){animation-delay:.45s}
+  @keyframes bar{0%,100%{height:5px}50%{height:19px}}
+  .play.playing svg{display:none}.play.playing .bars{display:flex}
+  .play.busy{opacity:.7;cursor:progress}
+  .play.small{width:36px;height:36px;box-shadow:0 3px 12px rgba(124,156,255,.3)}
+  .play.small svg{width:15px;height:15px}.play.small .bars{height:14px}
+
+  h2{margin:8px 2px 0;font-size:11px;color:var(--faint);letter-spacing:.12em;text-transform:uppercase;font-weight:700}
+  .item{padding:12px 14px;border-radius:12px;background:rgba(13,17,32,.8);border:1px solid var(--line)}
+  .itemhead{display:flex;gap:12px;align-items:center}
+
+  .where{margin-top:12px;display:flex;flex-direction:column;gap:6px}
+  .copyrow{display:flex;align-items:center;gap:8px;background:rgba(7,9,18,.75);border:1px solid var(--line);border-radius:9px;padding:6px 6px 6px 10px;min-width:0}
+  .when{margin-left:auto;text-align:right;flex:0 0 auto;text-transform:none;letter-spacing:0}
+  .when .stamp{display:flex;align-items:center;gap:7px;justify-content:flex-end;color:#7dd3fc;font-size:18px;font-weight:700}
+  .when .stamp svg{width:20px;height:20px;flex:0 0 auto}
+  .when .age{color:var(--faint);font-size:12px;font-weight:500;margin-top:2px}
+  .itemhead .when .stamp{font-size:15px}
+  .itemhead .when .stamp svg{width:16px;height:16px}
+  .itemtext{min-width:0;flex:1}
+  .copyrow code.pop{animation:pop 1.2s ease-in-out 1}
+  @keyframes pop{0%,100%{font-size:12px}45%,55%{font-size:24px}}
+  .answer{display:inline-flex;align-items:center;gap:8px;margin-top:12px;padding:6px 12px;border-radius:999px;font-size:13px;font-weight:600;border:1px solid var(--line)}
+  .answer .mark{font-size:16px;font-weight:800}
+  .answer .at{font-weight:500;opacity:.85}
+  .answer.allowed{color:#4ade80;background:rgba(74,222,128,.1);border-color:rgba(74,222,128,.4)}
+  .answer.denied{color:#f87171;background:rgba(248,113,113,.1);border-color:rgba(248,113,113,.4)}
+  .answer.waiting{color:var(--pin);background:rgba(251,191,36,.08);border-color:rgba(251,191,36,.3)}
+  .answer.unknown{color:var(--faint)}
+  .item .answer{margin-top:8px;font-size:12px;padding:4px 10px}
+  .eyebrow.done{color:var(--faint)}
+  .eyebrow.done .pulse{background:var(--faint);animation:none;box-shadow:none}
+  .more{align-self:center;margin:4px 0 8px;border:1px solid var(--line2);background:var(--panel2);color:var(--dim);border-radius:999px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer}
+  .more:hover{color:var(--ink);border-color:var(--hue)}
+  .copyrow.is-folder code{color:#c4a1ff}
+  .copyrow.is-session code{color:#ffd84d}
+  .copyrow.is-resume code{color:#ff8ad8}
+  .copyrow.missing code{color:var(--faint);font-style:italic;user-select:none}
+  .copyrow .label{flex:0 0 62px;color:var(--faint);font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+  .copyrow code{flex:1;min-width:0;overflow-x:auto;white-space:nowrap;font:12px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;color:#cfd8ff;user-select:all;scrollbar-width:thin}
+  .copy{flex:0 0 auto;border:1px solid var(--line2);background:var(--panel2);color:var(--dim);border-radius:7px;padding:4px 10px;font-size:11.5px;font-weight:600;cursor:pointer}
+  .copy:hover{color:var(--ink);border-color:var(--hue)}
+  .copy.done{color:var(--active);border-color:var(--active)}
+  .item p{margin:0;font-size:13px;color:var(--ink)}
+  .item small{display:block;color:var(--faint);font-size:11px;margin-top:2px}
+
+  [hidden]{display:none!important}
+
+  /* Tabs: permission cards, and the questions you type to Claude. */
+  .tabs{display:flex;gap:6px;padding:4px 16px 2px}
+  .tab{border:1px solid var(--line);background:transparent;color:var(--dim);border-radius:999px;padding:6px 14px;font:600 12.5px inherit;cursor:pointer}
+  .tab:hover{color:var(--ink);border-color:var(--hue)}
+  .tab[aria-selected="true"]{background:var(--panel2);color:var(--ink);border-color:var(--hue)}
+  .tab:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+
+  /* Initial Setup: a static page of checklist, diagram and copyable prompts. */
+  #setup{flex:1;overflow:auto;padding:10px 16px 60px;max-width:760px}
+  #setup h2{font-size:14.5px;margin:22px 0 8px;color:var(--ink)}
+  #setup h2:first-child{margin-top:4px}
+  #setup p{color:var(--dim);font-size:13px;line-height:1.55;margin:0 0 10px;max-width:68ch}
+  #setup code{font:12px ui-monospace,SFMono-Regular,Consolas,monospace;color:#cfd8ff;background:rgba(7,9,18,.6);border-radius:5px;padding:1px 5px}
+  #setup .checklist{list-style:none;margin:0 0 4px;padding:0;display:flex;flex-direction:column;gap:7px;max-width:68ch}
+  #setup .checklist li{display:flex;gap:8px;align-items:flex-start;font-size:13px;color:var(--ink);line-height:1.5}
+  #setup .checklist li::before{content:'\2610';flex:0 0 auto;color:var(--hue);font-size:13.5px;line-height:1.5}
+  #setup .setup-prompt{background:rgba(7,9,18,.75);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0 0 14px}
+  #setup .setup-prompt .plabel{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+  #setup .setup-prompt .plabel span{color:var(--faint);font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+  #setup .setup-prompt pre{margin:0;white-space:pre-wrap;font:12px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace;color:#cfd8ff;user-select:all;background:none;padding:0}
+  #setup .diagram{display:flex;flex-direction:column;gap:8px;margin:4px 0 18px;max-width:68ch}
+  #setup .diagram .row{display:flex;align-items:stretch;gap:10px;flex-wrap:wrap}
+  #setup .diagram .box{flex:1;min-width:160px;border:1px solid var(--line2);background:var(--panel2);border-radius:9px;padding:9px 12px}
+  #setup .diagram .box b{display:block;color:var(--ink);font-size:12.5px;margin-bottom:2px}
+  #setup .diagram .box span{color:var(--dim);font-size:11.5px}
+  #setup .diagram .box.allow{border-color:#4ade8055}
+  #setup .diagram .box.deny{border-color:#ff6b6b55}
+  #setup .diagram .arrow{flex:0 0 auto;align-self:center;color:var(--faint);font-size:11.5px;text-align:center;white-space:nowrap}
+
+  /* New Claude Request: one card per question, each with two flows side by side. */
+  #requests{flex:1;overflow:auto;padding:10px 16px 84px}
+  .rq-intro{margin:6px 2px 14px;color:var(--dim);font-size:13px;max-width:70ch}
+  .rq-list{display:flex;flex-direction:column;gap:8px}
+  /* A card is one row when closed (number, risk, start of the question, folder, session, time) and opens in place. */
+  .rq{border-radius:12px;background:var(--panel);border:1px solid var(--line);border-left:5px solid var(--risk,var(--line2));overflow:hidden}
+  .rq.open{box-shadow:0 8px 30px rgba(0,0,0,.45)}
+  .rq-row{display:flex;align-items:center;gap:10px;width:100%;min-width:0;border:0;background:transparent;color:var(--ink);padding:8px 12px;text-align:left;cursor:pointer;font:inherit;white-space:nowrap}
+  .rq-row:hover{background:rgba(124,156,255,.09)}
+  .rq-row:focus-visible{outline:2px solid var(--ink);outline-offset:-3px}
+  .rq-snip{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:14.5px;font-weight:600}
+  .rq-mini{flex:none;font:12px ui-monospace,SFMono-Regular,Consolas,monospace;color:var(--dim);background:rgba(7,9,18,.6);border:1px solid var(--line);border-radius:6px;padding:1px 7px;max-width:170px;overflow:hidden;text-overflow:ellipsis}
+  .rq-mini.rq-minisession{color:#ffd84d}.rq-mini.rq-minifolder{color:#c4a1ff}
+  .rq-mini.rq-minitime{border:0;background:none;color:#7dd3fc;font-weight:700}
+  .rq-miniflag{flex:none;display:inline-flex;align-items:center;gap:4px;background:var(--risk,var(--line2));color:#0b0f1e;font-size:11px;font-weight:900;letter-spacing:.08em;border-radius:5px;padding:1px 8px;cursor:help}
+  .risk-critical .rq-miniflag{animation:alarm 1.2s ease-in-out infinite}
+  .rq-chev{flex:none;color:var(--hue);font-size:14px;transition:transform .15s}
+  .rq.open .rq-chev{transform:rotate(90deg)}
+  .rq.open .rq-row{background:rgba(124,156,255,.07)}
+  .rq-panel{padding:10px 14px 14px;border-top:1px solid var(--line2);background:#141a36}
+  .rq-heldchip{flex:none;font-size:10.5px;font-weight:900;letter-spacing:.08em;border-radius:5px;padding:1px 7px;background:#fbbf24;color:#0b0f1e}
+  .rq-heldbanner{margin-bottom:10px;border:2px solid #fbbf24;background:rgba(251,191,36,.12);color:#fde68a;border-radius:10px;padding:8px 12px;font-size:13px;font-weight:700}
+  .rq-current{box-shadow:0 0 0 3px var(--hue),0 0 26px rgba(124,156,255,.55);animation:rqpulse 1.6s ease-in-out 5}
+  @keyframes rqpulse{50%{box-shadow:0 0 0 3px var(--hue),0 0 6px rgba(124,156,255,.2)}}
+  @media (max-width:760px){.rq-minisession,.rq-minitime{display:none}}
+  @media (prefers-reduced-motion:reduce){.rq-current,.risk-critical .rq-miniflag{animation:none}}
+
+  /* The voice bar: fixed to the bottom of the New Claude Request tab, always in reach. */
+  .rq-dock{position:fixed;left:0;right:0;bottom:0;z-index:30;display:flex;align-items:center;gap:10px;padding:9px 16px calc(9px + env(safe-area-inset-bottom,0px));background:rgba(10,13,26,.97);border-top:1px solid var(--line2)}
+  .rq-dock.on{border-top-color:var(--active)}
+  .rq-dockbtn{border:1px solid var(--hue);background:rgba(124,156,255,.14);color:var(--ink);border-radius:999px;padding:7px 16px;font-size:13px;font-weight:800;cursor:pointer;min-width:104px}
+  .rq-dockbtn:hover:not(:disabled){background:rgba(124,156,255,.3)}
+  .rq-dockbtn.stop{border-color:#f87171;background:rgba(248,113,113,.14)}
+  .rq-dockbtn.stop:hover:not(:disabled){background:rgba(248,113,113,.3)}
+  .rq-dockbtn:disabled{opacity:.4;cursor:default}
+  .rq-dockbtn:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+  .rq-docktext{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12.5px;color:var(--dim)}
+  .rq-head{display:flex;gap:8px 14px;align-items:center;flex-wrap:wrap}
+  .rq-when{margin-left:auto;font-size:13px;color:var(--faint);white-space:nowrap}
+  .rq-stamp{color:#7dd3fc;font-weight:700;font-size:14px}
+  .rq .rq-pair{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:6px 8px;margin-top:8px}
+  .rq-pair .copyrow .label{flex:0 0 54px}
+  .chip.bypass{color:#fecaca;border-color:#f43f5e;background:rgba(244,63,94,.14)}
+  .rq-box{margin-top:8px;border:1px solid var(--line);background:rgba(7,9,18,.7);border-radius:10px;padding:6px 10px 8px;min-width:0}
+  .rq-boxhead{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+  .rq-boxhead .label{flex:1;color:var(--faint);font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+  .rq-text{margin:0;white-space:pre-wrap;word-break:break-word;font:13px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace;color:#cfd8ff;max-height:240px;overflow:auto;user-select:all}
+  .rq-box.asked{border-color:var(--line2)}
+  /* The question itself: 18 pt, in the page's normal font, so it is the first thing read. */
+  .rq-box.asked .rq-text{font:400 18pt/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:var(--ink);max-height:300px;user-select:text}
+  .rq-filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 10px}
+  .rq-filterlabel{font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+  .rq-fchip{border:2px solid var(--risk,var(--line2));background:transparent;color:var(--ink);border-radius:999px;padding:4px 13px;font-size:12px;font-weight:800;cursor:pointer;opacity:.55}
+  .rq-fchip:hover{opacity:.9}
+  .rq-fchip[aria-pressed="true"]{background:var(--risk,var(--panel2));color:#0b0f1e;opacity:1}
+  .rq-fchip.all{--risk:var(--hue)}
+  .rq-fchip:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+  .rq-nomatch{margin:8px 2px;color:var(--dim);font-size:13px}
+  .rq-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 12px}
+  .rq-bar .more{margin:0}
+  /* The fold: one bordered block, in a different shade from the card, holding the toggle and all that opens under it. */
+  .rq-fold{margin-top:8px;border:1px solid var(--line2);border-radius:12px;background:#151c3a;overflow:hidden}
+  .rq.open .rq-fold{border:2px solid var(--hue);background:#161e40}
+  .rq-toggle{display:block;width:100%;text-align:left;border:0;background:transparent;color:var(--hue);padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer}
+  .rq-toggle:hover{color:var(--ink);background:rgba(124,156,255,.1)}
+  .rq-toggle:focus-visible{outline:2px solid var(--ink);outline-offset:-3px}
+  .rq-body{padding:10px 12px 12px;border-top:1px solid var(--line2)}
+  .rq-box.updated{border-color:rgba(74,222,128,.5);background:rgba(74,222,128,.05)}
+  .rq-box.updated .rq-text{color:#c9f7d8}
+  .rq-where{margin-top:10px;font-size:12.5px;color:#86efac;font-weight:600}
+  .rq-nochange{margin-top:10px;font-size:12.5px;color:var(--faint)}
+  .rq-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));gap:14px;margin-top:14px}
+  .rq-col{background:rgba(13,17,32,.85);border:1px solid var(--line);border-radius:12px;padding:12px 14px;min-width:0}
+  .rq-col.today{border-top:4px solid #f87171}.rq-col.better{border-top:4px solid #4ade80}
+  .rq-colhead{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+  .rq-colhead h3{margin:0;font-size:14px}
+  .rq-verdict{display:inline-flex;align-items:center;gap:7px;flex-wrap:wrap;border-radius:999px;padding:4px 14px 4px 10px;font-size:14px;letter-spacing:.06em;color:#0b0f1e;cursor:help}
+  .rq-verdict b{font-weight:900}.rq-verdict .vmark{font-size:15px;line-height:1}
+  .rq-verdict small{font-size:11px;font-weight:600;letter-spacing:0;opacity:.85}
+  .rq-verdict.safe{background:#4ade80}.rq-verdict.unsafe{background:#f43f5e;color:#fff;animation:alarm 1.2s ease-in-out infinite}
+  @media (prefers-reduced-motion:reduce){.rq-verdict.unsafe{animation:none}}
+  .rq-play{border:1px solid var(--hue);background:rgba(124,156,255,.12);color:var(--hue);border-radius:999px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer}
+  .rq-play:hover{background:rgba(124,156,255,.22)}
+  /* The risk flag at the top of every card. */
+  .rq-headleft{min-width:0;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
+  .rq-id{font:900 16px Arial,sans-serif;color:var(--hue);border:2px solid var(--hue);border-radius:8px;padding:1px 9px;cursor:help;letter-spacing:.02em}
+  .rq-ref{display:inline-flex;align-items:center;gap:6px;min-width:0;background:rgba(7,9,18,.7);border:1px solid var(--line);border-radius:8px;padding:2px 4px 2px 8px;font-size:12px}
+  .rq-ref b{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+  .rq-ref code{font:12px ui-monospace,SFMono-Regular,Consolas,monospace;color:#cfd8ff;white-space:nowrap}
+  .rq-ref .copy{padding:1px 7px;font-size:11px}
+  .rq-flagrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .rq-flag{display:inline-flex;align-items:center;gap:8px;padding:6px 22px 6px 12px;font-size:13px;letter-spacing:.09em;text-transform:uppercase;color:#0b0f1e;background:var(--risk,var(--line2));clip-path:polygon(0 0,100% 0,calc(100% - 12px) 50%,100% 100%,0 100%);cursor:help}
+  .rq-flag b{font-weight:900}.rq-flag .flagmark{font-size:16px;line-height:1}
+  .rq-reason{color:var(--dim);font-size:13px;font-weight:600;cursor:help}
+  .risk-critical .rq-flag{animation:alarm 1.2s ease-in-out infinite}
+
+  /* The trifecta: three overlapping circles. Grey = absent, coloured = present, red middle = danger. */
+  .rq-tri{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:10px 0 12px}
+  .rq-venn{width:104px;height:auto;flex:none;overflow:visible}
+  .rq-trivis{flex:none;display:flex;flex-direction:column;align-items:center;gap:2px}
+  .rq-face{font-size:30px;line-height:1;cursor:help;transition:transform .25s}
+  .rq-face.angry{animation:faceshake .5s ease-in-out infinite;filter:drop-shadow(0 0 6px rgba(244,63,94,.7))}
+  @keyframes faceshake{25%{transform:rotate(-8deg) scale(1.1)}75%{transform:rotate(8deg) scale(1.1)}}
+  @media (prefers-reduced-motion:reduce){.rq-face.angry{animation:none}}
+  .rq-do{margin:10px 0 4px;border:2px solid #4ade80;background:rgba(74,222,128,.08);border-radius:12px;padding:10px 14px 12px}
+  .rq-dohead{font-size:12px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:#86efac;margin-bottom:6px}
+  /* Numbered badges, so "step 3" in a caption or a banner can be found at a glance. */
+  .rq-num{display:inline-grid;place-items:center;flex:none;min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:var(--hue);color:#0b0f1e;font:900 12px Arial,sans-serif;margin-right:2px;transition:background .25s}
+  .rq-num.do{background:#4ade80}
+  .rq-node.active .rq-num,.rq-node.done .rq-num{background:#5eead4}
+  .rq-node.danger .rq-num{background:#f43f5e;color:#fff}
+  .rq-dosteps{margin:0;padding:0;list-style:none;font-size:13.5px;color:var(--ink)}
+  .rq-dosteps li{margin:0 0 8px;display:flex;flex-wrap:wrap;gap:4px 8px;align-items:flex-start}
+  .rq-dosteps .rq-dotext{flex:1 1 200px;min-width:0}
+  .rq-dosteps .rq-cmd{flex:1 1 100%;margin-left:30px}
+  .rq-promptcopy{border:0;background:none;padding:0}
+  .copy.big{background:#4ade80;color:#0b0f1e;border-color:#4ade80;font-weight:800;padding:6px 14px}
+  .rq-cmd{display:flex;align-items:center;gap:8px;margin-top:4px;background:rgba(7,9,18,.75);border:1px solid var(--line);border-radius:8px;padding:5px 6px 5px 10px;min-width:0}
+  .rq-cmd code{flex:1;min-width:0;overflow-x:auto;white-space:nowrap;font:12px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;color:#c9f7d8;user-select:all;scrollbar-width:thin}
+  .rq-triside{flex:1 1 170px;min-width:0;display:flex;flex-direction:column;gap:8px}
+  .rq-venn .c{fill:var(--col);stroke:var(--col);transition:fill-opacity .3s,stroke-opacity .3s}
+  .rq-venn .P{--col:#f43f5e}.rq-venn .U{--col:#fbbf24}.rq-venn .O{--col:#7c9cff}
+  .rq-venn .c.off{fill:#94a3b8;fill-opacity:.12;stroke:#94a3b8;stroke-opacity:.5;stroke-width:1.5;stroke-dasharray:3 4}
+  .rq-venn .c.soft{fill-opacity:.2;stroke-opacity:.9;stroke-width:2;stroke-dasharray:6 4}
+  .rq-venn .c.on{fill-opacity:.5;stroke-opacity:1;stroke-width:2.5}
+  .rq-venn .core{fill:#ff1744;opacity:0;transition:opacity .3s}
+  .rq-venn .bang{font:900 26px Arial,sans-serif;fill:#fff;opacity:0;transition:opacity .3s;pointer-events:none}
+  .rq-venn.danger .core{opacity:.95}.rq-venn.danger .bang{opacity:1}
+  .rq-venn.danger{filter:drop-shadow(0 0 10px rgba(255,23,68,.75));animation:rqglow 1.1s ease-in-out infinite}
+  @keyframes rqglow{50%{filter:drop-shadow(0 0 3px rgba(255,23,68,.3))}}
+  .rq-venn .ltr{font:800 20px Arial,sans-serif;fill:var(--col);cursor:help}
+  .rq-venn .cap{font:600 10.5px Arial,sans-serif;fill:var(--dim);cursor:help}
+  .rq-venn .ltr.off,.rq-venn .cap.off{fill:#94a3b8;opacity:.65}
+  .rq-key{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11.5px;color:var(--dim)}
+  .rq-keyitem{cursor:help;display:inline-flex;align-items:center;gap:5px}
+  .rq-voice{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--dim);cursor:pointer}
+  .rq-voicenote{color:var(--faint);font-size:11.5px}
+  @media (prefers-reduced-motion:reduce){.rq-venn.danger,.risk-critical .rq-flag{animation:none}}
+  .rq-banner{font-size:12.5px;font-weight:700;border-radius:8px;padding:5px 9px;margin-bottom:10px;background:rgba(17,22,41,.85);color:var(--dim)}
+  .rq-banner.bad{color:#fecaca;background:rgba(244,63,94,.16)}.rq-banner.good{color:#bbf7d0;background:rgba(74,222,128,.12)}.rq-banner.mid{color:#fde68a;background:rgba(251,191,36,.1)}
+  .rq-flow{list-style:none;margin:0;padding:0}
+  .rq-node{position:relative;border:2px solid var(--line2);border-radius:10px;padding:7px 11px;background:rgba(7,9,18,.6);opacity:.88;transition:background .25s,transform .25s,border-color .25s}
+  /* The arrow into a step: a bold shaft and a big head, bright so it reads on the dark card.
+     It turns teal once the animation has reached that step. */
+  .rq-node+.rq-node{margin-top:34px}
+  .rq-node+.rq-node::before{content:"";position:absolute;left:24px;top:-34px;height:26px;width:4px;border-radius:2px;background:#9db4ff}
+  .rq-node+.rq-node::after{content:"";position:absolute;left:14px;top:-15px;border-left:12px solid transparent;border-right:12px solid transparent;border-top:14px solid #9db4ff}
+  .rq-node.active::before,.rq-node.done::before{background:#5eead4}
+  .rq-node.active::after,.rq-node.done::after{border-top-color:#5eead4}
+  .rq-node.ok{border-color:#2f8f5b}.rq-node.watch{border-color:#d4a017}.rq-node.danger{border-color:#f43f5e}.rq-node.you{border-color:var(--hue)}
+  .rq-node.active{background:rgba(124,156,255,.2);opacity:1;transform:translateX(6px)}.rq-node.done{opacity:1}
+  .rq-title{font-weight:600;font-size:13px;display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center}
+  .rq-sub{font-size:12px;color:var(--dim)}
+  .rq-lane{font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)}
+  .rq-leg{font-size:10.5px;font-weight:800;border-radius:4px;padding:0 5px}
+  .rq-leg.P{background:rgba(244,63,94,.2);color:#fecaca}.rq-leg.U{background:rgba(251,191,36,.18);color:#fde68a}.rq-leg.O{background:rgba(124,156,255,.2);color:#c7d2fe}
+  .rq-caption{min-height:3.4em;margin-top:12px;padding:8px 10px;border-radius:8px;background:rgba(124,156,255,.1);font-size:13px;color:var(--ink)}
+  .rq-why{margin-top:12px;font-size:13px;color:var(--dim)}
+  .rq-why summary{cursor:pointer;font-weight:700;color:var(--hue)}
+  .rq-why ul{margin:8px 0 6px;padding-left:20px}
+  .rq-note{margin:6px 0 0;font-size:11.5px;color:var(--faint)}
+  @media (prefers-reduced-motion:reduce){.rq-node,.rq-lamp{transition:none}}
+  /* Live: the step Claude is on now has a marching-ants border, in the colour of its tone.
+     The ants are four striped edges drawn over the border box and slid along. */
+  .rq-node.live,.rq.running .rq-row{--ant:#5eead4;--antbg:rgba(94,234,212,.08);
+    background:
+      linear-gradient(90deg,var(--ant) 50%,transparent 0) repeat-x 0 0/14px 2px border-box,
+      linear-gradient(90deg,var(--ant) 50%,transparent 0) repeat-x 0 100%/14px 2px border-box,
+      linear-gradient(0deg,var(--ant) 50%,transparent 0) repeat-y 0 0/2px 14px border-box,
+      linear-gradient(0deg,var(--ant) 50%,transparent 0) repeat-y 100% 0/2px 14px border-box,
+      var(--antbg) padding-box;
+    animation:ants .7s linear infinite}
+  .rq-node.live{border-color:transparent;opacity:1}
+  .rq-node.live.watch{--ant:#facc15;--antbg:rgba(250,204,21,.09)}.rq-node.live.danger{--ant:#f43f5e;--antbg:rgba(244,63,94,.12)}.rq-node.live.ok{--ant:#4ade80;--antbg:rgba(74,222,128,.08)}
+  @keyframes ants{to{background-position:14px 0,-14px 100%,0 -14px,100% 14px,0 0}}
+  .rq-doprompt{margin:6px 0 4px;padding:6px 8px;border:1px solid rgba(74,222,128,.4);border-radius:7px;background:rgba(74,222,128,.05);max-height:160px;user-select:text}
+  .rq-livewhy{margin-top:7px;padding:7px 9px;border-radius:7px;background:rgba(251,191,36,.1);border-left:3px solid #facc15;font-size:12.5px;line-height:1.45;color:#fde68a}
+  .rq-livewhy.bad{background:rgba(244,63,94,.14);border-left-color:#f43f5e;color:#fecaca}
+  .rq-livenow{margin-bottom:4px;font:600 11.5px ui-monospace,Consolas,monospace;color:var(--ink);overflow-wrap:anywhere}
+  .rq-node.pending{opacity:.5;border-style:dashed}
+  .rq-node.ran{opacity:1}
+  /* A step that reached the internet: a skull and crossbones that pulses. */
+  .rq-skull{flex:none;display:inline-block;font-size:17px;line-height:1;color:#fecaca;text-shadow:0 0 6px #f43f5e;cursor:help;animation:skull 1.1s ease-in-out infinite}
+  @keyframes skull{50%{transform:scale(1.35);color:#fff;text-shadow:0 0 12px #f43f5e,0 0 3px #f43f5e}}
+
+  /* A detected prompt injection: hazard tape, jagged yellow-and-black edges, a skull and crossbones. */
+  .rq-injchip{flex:none;display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:900;letter-spacing:.05em;border-radius:5px;
+    padding:1px 7px;background:repeating-linear-gradient(135deg,#000 0 6px,#ffcc00 6px 12px);color:#0b0f1e;animation:skull 1.1s ease-in-out infinite}
+  .rq-hazard{margin:4px 0 12px;padding:6px;background:repeating-linear-gradient(135deg,#0a0a0a 0 14px,#ffcc00 14px 28px);
+    box-shadow:0 4px 18px rgba(0,0,0,.5);
+    clip-path:polygon(0 5%,4% 0,9% 4%,14% 0,19% 4%,24% 0,29% 4%,34% 0,39% 4%,44% 0,49% 4%,54% 0,59% 4%,64% 0,69% 4%,74% 0,79% 4%,84% 0,89% 4%,94% 0,100% 5%,
+      100% 95%,96% 100%,91% 96%,86% 100%,81% 96%,76% 100%,71% 96%,66% 100%,61% 96%,56% 100%,51% 96%,46% 100%,41% 96%,36% 100%,31% 96%,26% 100%,21% 96%,16% 100%,11% 96%,6% 100%,0 95%)}
+  .rq-hazard-body{background:#160f08;padding:14px 16px 12px}
+  .rq-hazard-head{display:flex;align-items:center;justify-content:center;gap:10px;color:#ffcc00;font:900 13px Arial,sans-serif;letter-spacing:.12em;text-transform:uppercase}
+  .rq-hazard-skull{font-size:20px;line-height:1;animation:skull 1.1s ease-in-out infinite}
+  .rq-hazard-note{margin:8px 0 6px;color:#fde68a;font-size:12.5px}
+  .rq-hazard-text{margin:0;padding:9px 11px;border:1px dashed #ffcc00;border-radius:4px;background:rgba(255,204,0,.07);color:#ffe9a8;
+    font:13px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap;word-break:break-word;max-height:220px;overflow:auto;user-select:text}
+  @media (prefers-reduced-motion:reduce){.rq-injchip,.rq-hazard-skull{animation:none}}
+  .rq-livechip{flex:none;margin-left:8px;font-size:10.5px;font-weight:900;letter-spacing:.08em;border-radius:5px;padding:1px 7px;background:rgba(94,234,212,.15);color:#5eead4;animation:blink 1.2s ease-in-out infinite}
+  .rq-row .rq-livechip{margin-left:0}
+  .rq-stopchip{margin-left:8px;font-size:10.5px;font-weight:900;letter-spacing:.08em;border-radius:5px;padding:1px 7px;background:rgba(251,146,60,.2);color:#fdba74}
+  @keyframes blink{50%{opacity:.45}}
+  /* The actions behind a step, and the record inside "You read the result". */
+  .rq-acts,.rq-result{margin-top:6px;font-size:12px}
+  .rq-acts summary,.rq-result summary{cursor:pointer;color:var(--hue);font-weight:700}
+  .rq-result{border:1px solid var(--line2);border-radius:8px;padding:6px 8px;background:rgba(124,156,255,.06)}
+  .rq-result summary small{color:var(--faint);font-weight:600}
+  .rq-resicon{font-size:15px}
+  .rq-reshead{margin:8px 0 4px;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+  .rq-resnone{margin:6px 0 0;color:var(--dim)}
+  .rq-actlist{margin:4px 0 0;padding-left:20px;max-height:260px;overflow:auto}
+  ul.rq-actlist{list-style:none;padding-left:0}
+  .rq-act{display:flex;gap:6px;align-items:baseline;padding:2px 0;border-bottom:1px solid rgba(42,51,88,.5);min-width:0}
+  .rq-act.net .rq-actwhat{color:#fde68a}
+  .rq-acttime{flex:none;color:var(--faint);font:11px ui-monospace,Consolas,monospace}
+  .rq-acttool{flex:none;font-weight:700;color:#c7d2fe}
+  .rq-actwhat{min-width:0;overflow-wrap:anywhere;color:var(--dim);font-family:ui-monospace,Consolas,monospace;font-size:11.5px}
+  .rq-box.reply .rq-text{max-height:320px;user-select:text;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  @media (prefers-reduced-motion:reduce){.rq-node.live,.rq.running .rq-row,.rq-skull,.rq-livechip{animation:none}}
+
+  .empty{margin:auto;text-align:center;color:var(--dim);max-width:320px;padding:40px 10px}
+  .empty .big{font-size:40px;opacity:.85}
+  .empty p{margin:8px 0 0}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo" aria-hidden="true">🔔</div>
+  <b>Claude needs you</b>
+  <div class="conn" id="conn"><i></i><span>connecting…</span></div>
+</header>
+<nav class="tabs" role="tablist" aria-label="Views">
+  <button class="tab" role="tab" id="tab-permissions" aria-selected="true" aria-controls="cards" type="button">Permissions</button>
+  <button class="tab" role="tab" id="tab-requests" aria-selected="false" aria-controls="requests" type="button">New Claude Request</button>
+  <button class="tab" role="tab" id="tab-setup" aria-selected="false" aria-controls="setup" type="button">Initial Setup</button>
+</nav>
+<section class="stats" id="stats" aria-label="Prompts today and this week"></section>
+<main id="cards" aria-live="polite"></main>
+<main id="requests" role="tabpanel" aria-labelledby="tab-requests" hidden></main>
+<main id="setup" role="tabpanel" aria-labelledby="tab-setup" hidden>
+  <h2>What this is for</h2>
+  <p>This watches for the "lethal trifecta": a request that mixes private data, text written by
+  someone else, and the power to act, all in one session. That combination is what lets a hidden
+  instruction in a file, email or web page actually do something. The checklist below gets the
+  watcher running; the sandbox box further down is what gives risky requests somewhere safe to go
+  instead of your real one.</p>
+
+  <h2>Checklist</h2>
+  <ul class="checklist">
+    <li>Install Node 20+ and Claude Code, clone this repo, then run <code>node bin/claude-attention.mjs install</code>.</li>
+    <li>Turn pre-checking on: <code>/precheck hold</code> (or <code>/precheck show</code>) from Claude Code.</li>
+    <li>Turn the hard stop on: <code>/protect</code>. It stops the trifecta outright; send the same prompt again if you want to go ahead anyway.</li>
+    <li>Build a sandbox box for risky or untrusted work (recommended, not required) &mdash; use the first prompt below in a separate, fresh Claude Code session.</li>
+    <li>Run the second prompt below against that box and read its actual output before trusting it with anything real.</li>
+    <li>Open the <b>New Claude Request</b> tab and try a prompt like "check my email and compile a list of websites and contacts" &mdash; you should see it flagged.</li>
+  </ul>
+
+  <h2>How it fits together</h2>
+  <div class="diagram">
+    <div class="row">
+      <div class="box"><b>Your normal session</b><span>Has your files, keys, servers</span></div>
+      <div class="arrow">risky or<br>untrusted work<br>routes here &rarr;</div>
+      <div class="box"><b>Sandbox box</b><span>No secrets, no SSH keys, no LAN route</span></div>
+    </div>
+    <div class="row">
+      <div class="box allow" style="flex:0 0 100%"><b>Squid proxy, allow-list only</b><span>Everything the box sends out passes through here first</span></div>
+    </div>
+    <div class="row">
+      <div class="box allow"><b>Allowed</b><span>Anthropic, GitHub, npm, PyPI&hellip;</span></div>
+      <div class="box deny"><b>Denied</b><span>Your LAN, any VPN/Tailscale, everything else</span></div>
+    </div>
+  </div>
+
+  <h2>Prompts for your Claude Code session</h2>
+  <p>Paste these into a <b>separate</b> Claude Code session, not this one, and let it build the box for
+  your own machine and OS. It's a general pattern &mdash; no files from this repo are needed, and nothing
+  here reaches outside your own machine.</p>
+
+  <div class="setup-prompt">
+    <div class="plabel"><span>1. Set up the sandbox box</span><button class="copy" type="button">Copy</button></div>
+    <pre>Set up a sandboxed Docker environment I can run Claude Code inside for anything risky: reading web content or files from people I don't fully trust, trying an unknown repo or package, or any one-off task that doesn't need my real credentials. Build:
+
+1. A Docker Compose file with two services: the Claude container on an `internal: true` network (no route to my LAN or the internet on its own), and a Squid proxy service that bridges that network to the outside and enforces an allow-list.
+2. squid.conf starting with an allow-list of just: Anthropic's API/console domains (so `claude` works), github.com, api.github.com, registry.npmjs.org, pypi.org. Explicitly DENY all private ranges (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16), loopback, link-local, and the Tailscale CGNAT range (100.64.0.0/10) if I use Tailscale or another CGNAT-style VPN, so this box can never reach my home network or any VPN, even by mistake.
+3. The Claude container gets no SSH keys, no cloud credentials, no copy of my global Claude settings, and only one mounted scratch folder for its work. Run it with `claude --dangerously-skip-permissions` inside its own walls, since there's nothing sensitive in there to protect.
+4. A launcher script that starts the container attached only to the internal network, mounts the scratch folder, and prints a banner on start saying exactly what this box can and can't reach.
+5. A second variant allow-listing the open web instead of just those four domains, for research tasks, with the same private-range/VPN denies.
+
+I'm on [Windows with Docker Desktop / macOS with Docker Desktop / Linux with Docker Engine - tell it which]. Explain each file as you create it, and don't copy any of my existing SSH keys, env files or Claude settings into the image or the container.</pre>
+  </div>
+
+  <div class="setup-prompt">
+    <div class="plabel"><span>2. Verify it holds</span><button class="copy" type="button">Copy</button></div>
+    <pre>Using the sandbox box you just built, write and run a wall-test that proves, from inside the running container: it cannot reach my LAN (try a private-range address), it cannot reach any VPN/Tailscale address if I have one, and it cannot reach a site that is NOT on the Squid allow-list. Then confirm it CAN still reach Anthropic's API and the other allow-listed sites. Show me the actual output of each check, not just a summary, before I trust this box with anything.</pre>
+  </div>
+
+  <h2>Good to know</h2>
+  <ul class="checklist">
+    <li><code>/protect</code> is a backstop, not a replacement for judgment &mdash; it only catches the one pattern it's built to catch.</li>
+    <li>Nothing you type is sent anywhere outside this machine; the New Claude Request tab reads your own transcripts under <code>~/.claude/projects</code>.</li>
+    <li>Full details, every switch and how it all works: see the project's README.md.</li>
+  </ul>
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>
