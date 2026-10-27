@@ -163,7 +163,7 @@
 
   /* New Claude Request: one card per question, each with two flows side by side. */
   #requests{flex:1;overflow:auto;padding:10px 16px 84px}
-  .rq-intro{margin:6px 2px 14px;color:var(--dim);font-size:13px;max-width:70ch}
+  .rq-intro{margin:6px 2px 14px;color:var(--dim);font-size:13px}
   .rq-list{display:flex;flex-direction:column;gap:8px}
   /* A card is one row when closed (number, risk, start of the question, folder, session, time) and opens in place. */
   .rq{border-radius:12px;background:var(--panel);border:1px solid var(--line);border-left:5px solid var(--risk,var(--line2));overflow:hidden}
@@ -221,6 +221,20 @@
   .rq-nomatch{margin:8px 2px;color:var(--dim);font-size:13px}
   .rq-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 12px}
   .rq-bar .more{margin:0}
+  /* Search: filters what's already loaded, same as the risk chips. */
+  .rq-search-wrap{margin:0 0 10px}
+  .rq-search{width:100%;max-width:420px;background:rgba(7,9,18,.75);border:1px solid var(--line2);border-radius:999px;color:var(--ink);padding:7px 14px;font-size:13px;font:inherit}
+  .rq-search::placeholder{color:var(--faint)}
+  .rq-search:focus-visible{outline:2px solid var(--hue);outline-offset:1px}
+  /* A "⟲ ROUTINE" folder: a purple-edged row that collapses many runs of the same request into one. */
+  .rq-folder{border-left:5px solid #a78bfa}
+  .rq-folder>.rq-row{background:rgba(167,139,250,.07)}
+  .rq-folder>.rq-row:hover{background:rgba(167,139,250,.16)}
+  .rq-foldericon{flex:none;font-size:14px}
+  .rq-routinechip{flex:none;display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:900;letter-spacing:.05em;border-radius:5px;padding:1px 8px;background:rgba(167,139,250,.22);color:#e4d9ff;border:1px solid rgba(167,139,250,.55)}
+  .rq-folderpanel{padding:10px 14px 14px;border-top:1px solid var(--line2);background:#171a33}
+  .rq-folderintro{margin:0 0 10px;color:var(--dim);font-size:12.5px}
+  .rq-folderlist{display:flex;flex-direction:column;gap:8px}
   /* The fold: one bordered block, in a different shade from the card, holding the toggle and all that opens under it. */
   .rq-fold{margin-top:8px;border:1px solid var(--line2);border-radius:12px;background:#151c3a;overflow:hidden}
   .rq.open .rq-fold{border:2px solid var(--hue);background:#161e40}
@@ -282,7 +296,7 @@
   .rq-cmd code{flex:1;min-width:0;overflow-x:auto;white-space:nowrap;font:12px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;color:#c9f7d8;user-select:all;scrollbar-width:thin}
   .rq-triside{flex:1 1 170px;min-width:0;display:flex;flex-direction:column;gap:8px}
   .rq-venn .c{fill:var(--col);stroke:var(--col);transition:fill-opacity .3s,stroke-opacity .3s}
-  .rq-venn .P{--col:#f43f5e}.rq-venn .U{--col:#fbbf24}.rq-venn .O{--col:#7c9cff}
+  .rq-venn .P{--col:#f43f5e}.rq-venn .S{--col:#fbbf24}.rq-venn .A{--col:#7c9cff}
   .rq-venn .c.off{fill:#94a3b8;fill-opacity:.12;stroke:#94a3b8;stroke-opacity:.5;stroke-width:1.5;stroke-dasharray:3 4}
   .rq-venn .c.soft{fill-opacity:.2;stroke-opacity:.9;stroke-width:2;stroke-dasharray:6 4}
   .rq-venn .c.on{fill-opacity:.5;stroke-opacity:1;stroke-width:2.5}
@@ -316,7 +330,7 @@
   .rq-sub{font-size:12px;color:var(--dim)}
   .rq-lane{font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)}
   .rq-leg{font-size:10.5px;font-weight:800;border-radius:4px;padding:0 5px}
-  .rq-leg.P{background:rgba(244,63,94,.2);color:#fecaca}.rq-leg.U{background:rgba(251,191,36,.18);color:#fde68a}.rq-leg.O{background:rgba(124,156,255,.2);color:#c7d2fe}
+  .rq-leg.P{background:rgba(244,63,94,.2);color:#fecaca}.rq-leg.S{background:rgba(251,191,36,.18);color:#fde68a}.rq-leg.A{background:rgba(124,156,255,.2);color:#c7d2fe}
   .rq-caption{min-height:3.4em;margin-top:12px;padding:8px 10px;border-radius:8px;background:rgba(124,156,255,.1);font-size:13px;color:var(--ink)}
   .rq-why{margin-top:12px;font-size:13px;color:var(--dim)}
   .rq-why summary{cursor:pointer;font-weight:700;color:var(--hue)}

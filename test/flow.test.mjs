@@ -58,7 +58,8 @@ test('lamps: the normal terminal always has private data in reach; a sealed room
   const better = buildBetter(f, 'default');
   const web = better.findIndex((n) => n.kind === 'web');
   assert.equal(lampsAt(better, web, 'default', true).P, 'off');
-  assert.equal(trifecta({ P: 'on', U: 'on', O: 'soft' }), false);
+  assert.equal(trifecta({ P: 'on', S: 'on', A: 'soft' }), false);
+  assert.equal(trifecta({ P: 'on', S: 'on', A: 'on' }), true);
 });
 
 test('the updated prompt keeps the request and adds only the ground rules it needs', () => {

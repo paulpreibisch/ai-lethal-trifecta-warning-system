@@ -4,8 +4,8 @@
 //
 // The three legs that make a hidden instruction dangerous when they meet in one session:
 //   P  private data it can reach (keys, files, mail, servers)
-//   U  text written by strangers that it reads (web pages, messages, packages)
-//   O  the power to act (send, change, publish), with nobody asked first
+//   S  stranger text it reads (web pages, messages, packages) — untrusted
+//   A  the power to act (send, change, publish), with nobody asked first
 
 const RULES = [
   ['privread', /\b(my (e-?mails?|inbox|whatsapp|gmail|zoho|calendar|drive|files?|messages?|documents?)|check (my )?(e-?mails?|whatsapp|inbox|messages)|read (my|the) (messages|mail|e-?mails?)|(whatsapp|gmail|zoho) (bridge|messages))\b/i],
@@ -29,14 +29,14 @@ export function classify(text) {
 // What each step is, in plain words, and which legs it touches.
 export const KIND = {
   you: { title: 'You type it', legs: [], cap: 'You type the request. Nothing has happened yet.' },
-  followup: { title: 'A short “yes”', legs: ['O'], cap: 'A short “yes” approves whatever Claude offered last. That scope is not visible in this message, so check what it said before it.' },
-  privread: { title: 'Read your own mail, messages or files', legs: ['P', 'U'], cap: 'Claude reads your private mail, messages or files. Messages from strangers come with them, so private data and untrusted text are now in the same session.' },
-  web: { title: 'Search the web and open pages', legs: ['U'], cap: 'Claude searches and opens pages written by strangers. Any page can hide instructions aimed at Claude.' },
-  contacts: { title: 'Collect names, emails and phone numbers', legs: ['U'], cap: 'Claude copies contact details from those pages into a list. The list is built from text that strangers control.' },
-  edit: { title: 'Edit files and install packages', legs: ['U'], cap: 'Claude edits code and may install packages written by strangers. A bad package can run code on this machine.' },
-  server: { title: 'Change a server over ssh', legs: ['P', 'O'], cap: 'Claude connects to a server with your keys and changes it. A wrong target or a bad command affects a live site.' },
-  routine: { title: 'Create a job that runs by itself', legs: ['O'], cap: 'Claude sets up something that will run again, every day, with nobody watching.' },
-  send: { title: 'Send, post or publish', legs: ['O'], cap: 'Claude sends, posts or publishes something. It cannot be taken back.' },
+  followup: { title: 'A short “yes”', legs: ['A'], cap: 'A short “yes” approves whatever Claude offered last. That scope is not visible in this message, so check what it said before it.' },
+  privread: { title: 'Read your own mail, messages or files', legs: ['P', 'S'], cap: 'Claude reads your private mail, messages or files. Messages from strangers come with them, so private data and untrusted text are now in the same session.' },
+  web: { title: 'Search the web and open pages', legs: ['S'], cap: 'Claude searches and opens pages written by strangers. Any page can hide instructions aimed at Claude.' },
+  contacts: { title: 'Collect names, emails and phone numbers', legs: ['S'], cap: 'Claude copies contact details from those pages into a list. The list is built from text that strangers control.' },
+  edit: { title: 'Edit files and install packages', legs: ['S'], cap: 'Claude edits code and may install packages written by strangers. A bad package can run code on this machine.' },
+  server: { title: 'Change a server over ssh', legs: ['P', 'A'], cap: 'Claude connects to a server with your keys and changes it. A wrong target or a bad command affects a live site.' },
+  routine: { title: 'Create a job that runs by itself', legs: ['A'], cap: 'Claude sets up something that will run again, every day, with nobody watching.' },
+  send: { title: 'Send, post or publish', legs: ['A'], cap: 'Claude sends, posts or publishes something. It cannot be taken back.' },
   report: { title: 'Claude reports back', legs: [], cap: 'Claude tells you what it did and what it found.' },
   read: { title: 'You read the result', legs: [], cap: 'You read the result. This is your last check before anything is used.' },
 };
@@ -74,13 +74,13 @@ export function buildToday(f, mode) {
 // one of these). Steps that reached the internet are marked `net`.
 export const OBSERVED = {
   files: { title: 'Read files on this machine', legs: ['P'], cap: 'Claude read files on this laptop. Your own files are private data.' },
-  run: { title: 'Ran commands on this machine', legs: ['O'], cap: 'Claude ran commands in your terminal. They ran with your keys and files within reach.' },
-  change: { title: 'Changed files', legs: ['O'], cap: 'Claude edited or wrote files on this laptop.' },
-  web: { title: 'Reached the internet', legs: ['U'], cap: 'Claude opened pages or called addresses on the internet. What comes back is written by strangers and can hide instructions.' },
-  install: { title: 'Downloaded and ran packages', legs: ['U', 'O'], cap: 'Claude downloaded code written by strangers and ran it on this machine.' },
-  service: { title: 'Read from an online account', legs: ['P', 'U'], cap: 'Claude read from one of your online accounts. Private data and text strangers sent you arrive together.' },
-  send: { title: 'Sent, posted or changed something online', legs: ['O'], cap: 'Claude sent, published or changed something online. That cannot be taken back.' },
-  server: { title: 'Connected to a server', legs: ['P', 'O'], cap: 'Claude connected to a server with your keys.' },
+  run: { title: 'Ran commands on this machine', legs: ['A'], cap: 'Claude ran commands in your terminal. They ran with your keys and files within reach.' },
+  change: { title: 'Changed files', legs: ['A'], cap: 'Claude edited or wrote files on this laptop.' },
+  web: { title: 'Reached the internet', legs: ['S'], cap: 'Claude opened pages or called addresses on the internet. What comes back is written by strangers and can hide instructions.' },
+  install: { title: 'Downloaded and ran packages', legs: ['S', 'A'], cap: 'Claude downloaded code written by strangers and ran it on this machine.' },
+  service: { title: 'Read from an online account', legs: ['P', 'S'], cap: 'Claude read from one of your online accounts. Private data and text strangers sent you arrive together.' },
+  send: { title: 'Sent, posted or changed something online', legs: ['A'], cap: 'Claude sent, published or changed something online. That cannot be taken back.' },
+  server: { title: 'Connected to a server', legs: ['P', 'A'], cap: 'Claude connected to a server with your keys.' },
   agent: { title: 'Handed work to a helper agent', legs: [], cap: 'Claude handed part of the work to a helper agent. What the helper did is in its own record.' },
   skill: { title: 'Used a skill', legs: [], cap: 'Claude loaded one of your skills, a set of instructions for this kind of task.' },
 };
@@ -144,7 +144,7 @@ export function dangerNow(nodes, idx, mode) {
   const extra = [];
   if (act && act.net && n.kind !== 'web') extra.push('This step reaches the internet, so what comes back is text from strangers.');
   const before = nodes.slice(0, idx);
-  if (n.kind !== 'web' && n.kind !== 'service' && before.some((m) => m.legs.includes('U'))) extra.push('Text from strangers is already in this session, and it could be steering this step.');
+  if (n.kind !== 'web' && n.kind !== 'service' && before.some((m) => m.legs.includes('S'))) extra.push('Text from strangers is already in this session, and it could be steering this step.');
   if ((n.kind === 'web' || n.kind === 'install') && before.some((m) => m.kind === 'files' || m.kind === 'service')) extra.push('It has already read private data in this session, so there is something to leak.');
   if (isBypass(mode)) extra.push('Permission prompts are off, so nothing will ask you before it acts.');
   return {
@@ -157,12 +157,12 @@ export function dangerNow(nodes, idx, mode) {
 // Risk from what was actually done, rather than guessed from the words.
 export function riskObserved(nodes, mode) {
   if (firstTrifecta(nodes, mode, false) >= 0) return { level: 'critical', reason: 'all three at once, in what it actually did' };
-  if (nodes.some((n) => n.legs.includes('U'))) {
+  if (nodes.some((n) => n.legs.includes('S'))) {
     const nearPrivate = nodes.some((n) => n.legs.includes('P'));
     return { level: 'high', reason: nearPrivate ? 'it read text from the internet next to your accounts' : 'it read text from the internet' };
   }
   if (isBypass(mode) && nodes.some((n) => n.kind === 'send' || n.kind === 'server')) return { level: 'high', reason: 'it acted online with prompts off' };
-  if (nodes.some((n) => n.legs.includes('O'))) return { level: 'medium', reason: 'it changed something, all on this machine' };
+  if (nodes.some((n) => n.legs.includes('A'))) return { level: 'medium', reason: 'it changed something, all on this machine' };
   return { level: 'low', reason: 'it only read, and never went online' };
 }
 
@@ -176,24 +176,24 @@ export function buildBetter(f) {
     const roomName = room === 'box' ? 'agent box (agent.cmd)' : 'research box (research.cmd)';
     nodes.push({ kind: 'switch', lane: 'you', title: `Start the ${roomName}`, sub: 'One extra click instead of the normal terminal', legs: [],
       cap: `You open the ${roomName} instead. It holds no keys, no files and no servers, and your own networks are unreachable.` });
-    if (f.web) nodes.push({ kind: 'web', lane: room, title: 'Search the web and open pages', sub: 'Inside the sealed room', legs: ['U'],
+    if (f.web) nodes.push({ kind: 'web', lane: room, title: 'Search the web and open pages', sub: 'Inside the sealed room', legs: ['S'],
       cap: 'Same search, but a tricked Claude has nothing to take: no keys, no files and no servers in here.' });
-    if (f.contacts) nodes.push({ kind: 'contacts', lane: room, title: 'Collect names, emails and phone numbers', sub: 'Saved as a file inside the room', legs: ['U'],
+    if (f.contacts) nodes.push({ kind: 'contacts', lane: room, title: 'Collect names, emails and phone numbers', sub: 'Saved as a file inside the room', legs: ['S'],
       cap: 'The list is saved inside the room. Nothing private is nearby, so a hidden instruction has nothing to reach.' });
-    if (f.edit) nodes.push({ kind: 'edit', lane: 'box', title: 'Edit files and install packages', sub: 'On a feature branch', legs: ['U'],
+    if (f.edit) nodes.push({ kind: 'edit', lane: 'box', title: 'Edit files and install packages', sub: 'On a feature branch', legs: ['S'],
       cap: 'Code work happens in the agent box on a feature branch. A bad package runs inside the room, not on your laptop.' });
     nodes.push({ kind: 'copyout', lane: 'you', title: 'Copy the result out and read it', sub: 'docker cp, then look', legs: [],
       cap: 'You copy the result out. It is text from strangers, so you read it before using it.' });
   }
-  if (f.followup) nodes.push({ kind: 'followup', lane: 'normal', title: 'Claude repeats what it is about to do, then you say yes', sub: 'What, where, and to whom', legs: ['O'],
+  if (f.followup) nodes.push({ kind: 'followup', lane: 'normal', title: 'Claude repeats what it is about to do, then you say yes', sub: 'What, where, and to whom', legs: ['A'],
     cap: 'Before a short “yes” takes effect, Claude shows the exact action: what, where and to whom.' });
-  if (f.privread) nodes.push({ kind: 'privread', lane: 'normal', title: 'Read your mail or messages in a session that cannot send', sub: 'Text inside messages is data, not orders', legs: ['P', 'U'],
+  if (f.privread) nodes.push({ kind: 'privread', lane: 'normal', title: 'Read your mail or messages in a session that cannot send', sub: 'Text inside messages is data, not orders', legs: ['P', 'S'],
     cap: 'Reading happens in a session set up so it cannot send. Anything a message says to do is treated as text.' });
-  if (f.server) nodes.push({ kind: 'server', lane: 'normal', title: 'Show the exact change, then ask', sub: 'Host, setting, old value, new value, undo', legs: ['P', 'O'],
+  if (f.server) nodes.push({ kind: 'server', lane: 'normal', title: 'Show the exact change, then ask', sub: 'Host, setting, old value, new value, undo', legs: ['P', 'A'],
     cap: 'Claude says which server, which setting, the old and new value, saves a copy, and waits for your yes.' });
-  if (f.routine) nodes.push({ kind: 'routine', lane: 'server', title: 'Plain script, then a sealed AI step, then a fixed sender', sub: 'The AI step gets no keys and no tools', legs: ['O'],
+  if (f.routine) nodes.push({ kind: 'routine', lane: 'server', title: 'Plain script, then a sealed AI step, then a fixed sender', sub: 'The AI step gets no keys and no tools', legs: ['A'],
     cap: 'The routine is a plain script. Any AI step sees only the finished data with no keys and no tools, and a fixed sender delivers the result.' });
-  if (f.send) nodes.push({ kind: 'send', lane: 'normal', title: 'Draft it; you approve the exact text and recipient', sub: 'Then a fixed step sends', legs: ['O'],
+  if (f.send) nodes.push({ kind: 'send', lane: 'normal', title: 'Draft it; you approve the exact text and recipient', sub: 'Then a fixed step sends', legs: ['A'],
     cap: 'Claude drafts the message. You approve the exact text and recipient before anything goes out.' });
   if (!untrusted && !(f.privread || f.server || f.routine || f.send || f.followup)) {
     nodes.push({ kind: 'ask', lane: 'normal', title: 'Answer the question', sub: 'Use %USERPROFILE%\\lockdown\\agent.cmd if it needs web reading', legs: [],
@@ -208,17 +208,17 @@ export function buildBetter(f) {
 // 'on' = present, 'soft' = present but gated or harmless, 'off' = absent.
 export function lampsAt(nodes, idx, mode, better) {
   const lane = nodes[idx].lane;
-  if (lane === 'you') return { P: 'off', U: 'off', O: 'off' };
+  if (lane === 'you') return { P: 'off', S: 'off', A: 'off' };
   const same = nodes.slice(0, idx + 1).filter((n) => n.lane === lane);
-  const u = same.some((n) => n.legs.includes('U'));
-  const o = same.some((n) => n.legs.includes('O'));
-  if (lane === 'normal') return { P: 'on', U: u ? 'on' : 'off', O: better ? 'soft' : (isBypass(mode) || o ? 'on' : 'soft') };
-  if (lane === 'research' || lane === 'box') return { P: 'off', U: u ? 'on' : 'off', O: 'soft' };
-  if (lane === 'server') return { P: 'soft', U: 'off', O: 'soft' };
-  return { P: 'off', U: 'off', O: 'off' };
+  const u = same.some((n) => n.legs.includes('S'));
+  const o = same.some((n) => n.legs.includes('A'));
+  if (lane === 'normal') return { P: 'on', S: u ? 'on' : 'off', A: better ? 'soft' : (isBypass(mode) || o ? 'on' : 'soft') };
+  if (lane === 'research' || lane === 'box') return { P: 'off', S: u ? 'on' : 'off', A: 'soft' };
+  if (lane === 'server') return { P: 'soft', S: 'off', A: 'soft' };
+  return { P: 'off', S: 'off', A: 'off' };
 }
 
-export const trifecta = (l) => l.P === 'on' && l.U === 'on' && l.O === 'on';
+export const trifecta = (l) => l.P === 'on' && l.S === 'on' && l.A === 'on';
 
 // Index of the first step where all three are on, or -1.
 export function firstTrifecta(nodes, mode, better) {
